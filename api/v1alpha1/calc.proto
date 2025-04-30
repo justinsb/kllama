@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+package matrixserver.v1alpha1;
+
+option go_package = "github.com/justinsb/kllama/api/v1alpha1";
+
+// Serves simple matrix operations
+service BigCalculator {
+  // Performs a one-off calculation
+  rpc Calculate (CalculateRequest) returns (CalculateResponse) {}
+}
+
+// The request message containing the user's name.
+message CalculateRequest {
+    repeated Tensor tensors = 1;
+
+    repeated int32 output_tensors = 2;
+}
+
+// The response message containing the greetings
+message CalculateResponse {
+    repeated Tensor results = 2;
+}
+
+
+message Tensor {
+    int32 id = 1;
+
+    Source source = 2;
+    InlineData inline_data = 3;
+    TensorOperation computation = 4;
+}
+
+message Source {
+}
+
+message InlineData {
+    repeated int32 dimensions = 1;
+
+    repeated float values = 2;
+}
+
+message TensorOperation {
+    oneof operation {
+        LinearScale linear_scale = 1;
+        RMSNorm rms_norm = 2;
+    }
+}
+
+message LinearScale {
+    int32 source = 1;
+
+    float scale = 2;
+}
+
+
+message RMSNorm {
+    int32 source = 1;
+
+    float epsilon = 2;
+}
