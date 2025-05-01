@@ -47,6 +47,11 @@ func (ctx *GgmlContext) GgmlAdd(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_add(ctx.p, t1.p, t2.p)}
 }
 
+// GgmlSilu computes the SiLU (Sigmoid Linear Unit) of a tensor
+func (ctx *GgmlContext) GgmlSilu(t *GgmlTensor) *GgmlTensor {
+	return &GgmlTensor{p: C.ggml_silu(ctx.p, t.p)}
+}
+
 // GgmlFree frees the GGML context
 func (ctx *GgmlContext) Free() {
 	if ctx.p == nil {

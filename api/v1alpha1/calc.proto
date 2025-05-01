@@ -46,6 +46,7 @@ message TensorOperation {
         RMSNorm rms_norm = 2;
         DotMultiply dot_multiply = 3;
         Add add = 5;
+        Silu silu = 20;
     }
 }
 
@@ -68,4 +69,8 @@ message DotMultiply {
 
 message Add {
     repeated int32 sources = 1;
+}
+
+message Silu {
+    int32 source = 1;
 }

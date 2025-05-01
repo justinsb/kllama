@@ -213,6 +213,18 @@ func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
 			add := c.ggmlContext.GgmlAdd(sourceTensors[0].ggmlTensor, sourceTensors[1].ggmlTensor)
 			tensor.ggmlTensor = add
 			return nil
+
+		case *api.TensorOperation_Silu:
+			source := TensorID(operation.Silu.GetSource())
+			sourceTensor, found := c.tensors[source]
+			if !found {
+				return fmt.Errorf("source tensor %d not found", source)
+			}
+
+			silu := c.ggmlContext.GgmlSilu(sourceTensor.ggmlTensor)
+			tensor.ggmlTensor = silu
+			return nil
+
 		default:
 			return fmt.Errorf("unsupported operation: %T %+v", operation, operation)
 		}

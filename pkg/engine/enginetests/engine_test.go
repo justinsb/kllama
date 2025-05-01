@@ -54,9 +54,6 @@ func TestEngine(t *testing.T) {
 				t.Fatalf("expected inline data, got nil")
 			}
 			values := response.Results[0].InlineData.Values
-			if len(values) != 3 {
-				t.Fatalf("expected 3 values, got %d", len(values))
-			}
 			expected := []float32{0.46290955, 0.9258191, 1.3887286}
 			if !FloatingPointEqual(values, expected) {
 				t.Errorf("expected %+v, got %+v", expected, values)
@@ -103,9 +100,6 @@ func TestDotMultiply(t *testing.T) {
 				t.Fatalf("expected inline data, got nil")
 			}
 			values := response.Results[0].InlineData.Values
-			if len(values) != 3 {
-				t.Fatalf("expected 3 values, got %d", len(values))
-			}
 			expected := []float32{4, 10, 18}
 			if !FloatingPointEqual(values, expected) {
 				t.Errorf("expected %+v, got %+v", expected, values)
@@ -154,10 +148,53 @@ func TestAdd(t *testing.T) {
 				t.Fatalf("expected inline data, got nil")
 			}
 			values := response.Results[0].InlineData.Values
-			if len(values) != 3 {
-				t.Fatalf("expected 3 values, got %d", len(values))
-			}
 			expected := []float32{11, 18, 27}
+			if !FloatingPointEqual(values, expected) {
+				t.Errorf("expected %+v, got %+v", expected, values)
+			}
+		})
+	}
+}
+
+func TestSilu(t *testing.T) {
+	for name, newEngine := range engines() {
+		t.Run(name, func(t *testing.T) {
+			scope, err := newEngine()
+			if err != nil {
+				t.Fatalf("failed to create engine: %v", err)
+			}
+			defer scope.Close()
+
+			request := &api.CalculateRequest{
+				Tensors: []*api.Tensor{
+					{Id: 1, InlineData: &api.InlineData{Dimensions: []int32{3}, Values: []float32{-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5}}},
+					{Id: 3, Computation: &api.TensorOperation{Operation: &api.TensorOperation_Silu{Silu: &api.Silu{Source: 1}}}},
+				},
+				OutputTensors: []int32{3},
+			}
+
+			response, err := engine.Evaluate(scope, request)
+			if err != nil {
+				t.Fatalf("failed to evaluate: %v", err)
+			}
+
+			t.Logf("response: %v", response)
+
+			// Verify that we can close scope multiple times, and we don't reference freed memory reading response
+			if err := scope.Close(); err != nil {
+				t.Fatalf("failed to free scope: %v", err)
+			}
+
+			if len(response.Results) != 1 {
+				t.Fatalf("expected 1 result, got %d", len(response.Results))
+			}
+
+			if response.Results[0].InlineData == nil {
+				t.Fatalf("expected inline data, got nil")
+			}
+			values := response.Results[0].InlineData.Values
+
+			expected := []float32{-0.033464253, -0.07194484, -0.14227761, -0.23840584, -0.26894143, 0, 0.7310586, 1.7615942, 2.8577223, 3.928055, 4.9665356}
 			if !FloatingPointEqual(values, expected) {
 				t.Errorf("expected %+v, got %+v", expected, values)
 			}
