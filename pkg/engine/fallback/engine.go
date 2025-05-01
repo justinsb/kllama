@@ -87,7 +87,8 @@ func (c *CalculationScope) evaluateTensor(tensor *tensor) error {
 			for i := range values {
 				values[i] *= scale
 			}
-			tensor.inlineData = &api.InlineData{Values: values}
+			tensor.inlineData = &api.InlineData{Values: values, Dimensions: sourceTensor.dimensions}
+			tensor.dimensions = tensor.inlineData.Dimensions
 			return nil
 
 		case *api.TensorOperation_RmsNorm:
@@ -116,7 +117,8 @@ func (c *CalculationScope) evaluateTensor(tensor *tensor) error {
 			for i := range values {
 				values[i] *= rms
 			}
-			tensor.inlineData = &api.InlineData{Values: values}
+			tensor.inlineData = &api.InlineData{Values: values, Dimensions: sourceTensor.dimensions}
+			tensor.dimensions = tensor.inlineData.Dimensions
 			return nil
 
 		case *api.TensorOperation_DotMultiply:
@@ -139,7 +141,7 @@ func (c *CalculationScope) evaluateTensor(tensor *tensor) error {
 			sourceTensor1 := sourceTensors[1]
 
 			if !sameSize(sourceTensor0, sourceTensor1) {
-				return fmt.Errorf("tensors %d and %d have different sizes", sourceTensor0.id, sourceTensor1.id)
+				return fmt.Errorf("tensors %v and %v have different sizes", sourceTensor0, sourceTensor1)
 			}
 
 			if sourceTensor0.NDimensions() == 1 {
@@ -149,7 +151,37 @@ func (c *CalculationScope) evaluateTensor(tensor *tensor) error {
 				for i := range v0 {
 					values[i] = v0[i] * v1[i]
 				}
-				tensor.inlineData = &api.InlineData{Values: values}
+				tensor.inlineData = &api.InlineData{Values: values, Dimensions: sourceTensor0.dimensions}
+				tensor.dimensions = tensor.inlineData.Dimensions
+				return nil
+			} else {
+				return fmt.Errorf("unsupported tensor dimensions: %d", sourceTensor0.NDimensions())
+			}
+
+		case *api.TensorOperation_Add:
+			sourceTensors, err := c.getSourceTensors(operation.Add.GetSources()...)
+			if err != nil {
+				return err
+			}
+			if len(sourceTensors) != 2 {
+				return fmt.Errorf("expected 2 source tensors, got %d", len(sourceTensors))
+			}
+			sourceTensor0 := sourceTensors[0]
+			sourceTensor1 := sourceTensors[1]
+
+			if !sameSize(sourceTensor0, sourceTensor1) {
+				return fmt.Errorf("tensors %v and %v have different sizes", sourceTensor0, sourceTensor1)
+			}
+
+			if sourceTensor0.NDimensions() == 1 {
+				values0 := sourceTensor0.inlineData.GetValues()
+				values1 := sourceTensor1.inlineData.GetValues()
+				values := make([]float32, len(values0))
+				for i := range values {
+					values[i] = values0[i] + values1[i]
+				}
+				tensor.inlineData = &api.InlineData{Values: values, Dimensions: sourceTensor0.dimensions}
+				tensor.dimensions = tensor.inlineData.Dimensions
 				return nil
 			} else {
 				return fmt.Errorf("unsupported tensor dimensions: %d", sourceTensor0.NDimensions())

@@ -42,6 +42,11 @@ func (ctx *GgmlContext) GgmlMul(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_mul(ctx.p, t1.p, t2.p)}
 }
 
+// GgmlAdd computes the element-wise sum of two tensors
+func (ctx *GgmlContext) GgmlAdd(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
+	return &GgmlTensor{p: C.ggml_add(ctx.p, t1.p, t2.p)}
+}
+
 // GgmlFree frees the GGML context
 func (ctx *GgmlContext) Free() {
 	if ctx.p == nil {

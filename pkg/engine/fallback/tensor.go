@@ -36,6 +36,10 @@ func newTensor(definition *api.Tensor) *tensor {
 	return t
 }
 
+func (t *tensor) String() string {
+	return fmt.Sprintf("tensor-%d[%v]", t.id, t.dimensions)
+}
+
 func (t *tensor) NDimensions() int {
 	return len(t.dimensions)
 }

@@ -199,6 +199,20 @@ func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
 			tensor.ggmlTensor = dotProduct
 			return nil
 
+		case *api.TensorOperation_Add:
+			sourceTensors, err := c.getSourceTensors(operation.Add.GetSources()...)
+			if err != nil {
+				return err
+			}
+			for _, sourceTensor := range sourceTensors {
+				if sourceTensor.ggmlTensor == nil {
+					return fmt.Errorf("source tensor %d has no GGML tensor", sourceTensor.id)
+				}
+			}
+
+			add := c.ggmlContext.GgmlAdd(sourceTensors[0].ggmlTensor, sourceTensors[1].ggmlTensor)
+			tensor.ggmlTensor = add
+			return nil
 		default:
 			return fmt.Errorf("unsupported operation: %T %+v", operation, operation)
 		}
