@@ -47,6 +47,7 @@ message TensorOperation {
         DotMultiply dot_multiply = 3;
         Add add = 5;
         Silu silu = 20;
+        Softmax softmax = 21;
     }
 }
 
@@ -72,5 +73,9 @@ message Add {
 }
 
 message Silu {
+    int32 source = 1;
+}
+
+message Softmax {
     int32 source = 1;
 }

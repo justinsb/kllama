@@ -212,6 +212,46 @@ func (c *CalculationScope) evaluateTensor(tensor *tensor) error {
 				return fmt.Errorf("unsupported tensor dimensions: %d", sourceTensor.NDimensions())
 			}
 
+		case *api.TensorOperation_Softmax:
+			result := &api.Tensor{}
+			source := TensorID(operation.Softmax.GetSource())
+			sourceTensor, found := c.tensors[source]
+			if !found {
+				return fmt.Errorf("source tensor %d not found", source)
+			}
+			if err := sourceTensor.CopyDataTo(result); err != nil {
+				return err
+			}
+
+			if sourceTensor.NDimensions() == 1 {
+				src := sourceTensor.inlineData.GetValues()
+
+				// See https://en.wikipedia.org/wiki/Softmax_function,
+				// in particular the "Numerical stability" section
+				max := src[0]
+				for _, v := range src {
+					if v > max {
+						max = v
+					}
+				}
+
+				sumExp := float64(0)
+				for _, v := range src {
+					sumExp += math.Exp(float64(v - max))
+				}
+
+				values := make([]float32, len(src))
+				for i, v := range src {
+					values[i] = float32(math.Exp(float64(v-max)) / sumExp)
+				}
+
+				tensor.inlineData = &api.InlineData{Values: values, Dimensions: sourceTensor.dimensions}
+				tensor.dimensions = tensor.inlineData.Dimensions
+				return nil
+			} else {
+				return fmt.Errorf("unsupported tensor dimensions: %d", sourceTensor.NDimensions())
+			}
+
 		default:
 			return fmt.Errorf("unsupported operation: %T %+v", operation, operation)
 		}

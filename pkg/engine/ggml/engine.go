@@ -225,6 +225,17 @@ func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
 			tensor.ggmlTensor = silu
 			return nil
 
+		case *api.TensorOperation_Softmax:
+			source := TensorID(operation.Softmax.GetSource())
+			sourceTensor, found := c.tensors[source]
+			if !found {
+				return fmt.Errorf("source tensor %d not found", source)
+			}
+
+			softmax := c.ggmlContext.GgmlSoftmax(sourceTensor.ggmlTensor)
+			tensor.ggmlTensor = softmax
+			return nil
+
 		default:
 			return fmt.Errorf("unsupported operation: %T %+v", operation, operation)
 		}

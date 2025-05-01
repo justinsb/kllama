@@ -52,6 +52,10 @@ func (ctx *GgmlContext) GgmlSilu(t *GgmlTensor) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_silu(ctx.p, t.p)}
 }
 
+func (ctx *GgmlContext) GgmlSoftmax(t *GgmlTensor) *GgmlTensor {
+	return &GgmlTensor{p: C.ggml_soft_max(ctx.p, t.p)}
+}
+
 // GgmlFree frees the GGML context
 func (ctx *GgmlContext) Free() {
 	if ctx.p == nil {

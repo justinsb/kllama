@@ -202,6 +202,52 @@ func TestSilu(t *testing.T) {
 	}
 }
 
+func TestSoftmax(t *testing.T) {
+	for name, newEngine := range engines() {
+		t.Run(name, func(t *testing.T) {
+			scope, err := newEngine()
+			if err != nil {
+				t.Fatalf("failed to create engine: %v", err)
+			}
+			defer scope.Close()
+
+			request := &api.CalculateRequest{
+				Tensors: []*api.Tensor{
+					{Id: 1, InlineData: &api.InlineData{Dimensions: []int32{3}, Values: []float32{-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5}}},
+					{Id: 3, Computation: &api.TensorOperation{Operation: &api.TensorOperation_Softmax{Softmax: &api.Softmax{Source: 1}}}},
+				},
+				OutputTensors: []int32{3},
+			}
+
+			response, err := engine.Evaluate(scope, request)
+			if err != nil {
+				t.Fatalf("failed to evaluate: %v", err)
+			}
+
+			t.Logf("response: %v", response)
+
+			// Verify that we can close scope multiple times, and we don't reference freed memory reading response
+			if err := scope.Close(); err != nil {
+				t.Fatalf("failed to free scope: %v", err)
+			}
+
+			if len(response.Results) != 1 {
+				t.Fatalf("expected 1 result, got %d", len(response.Results))
+			}
+
+			if response.Results[0].InlineData == nil {
+				t.Fatalf("expected inline data, got nil")
+			}
+			values := response.Results[0].InlineData.Values
+
+			expected := []float32{2.8698709e-05, 7.801117e-05, 0.00021205637, 0.00057642895, 0.0015668964, 0.0042592655, 0.011577884, 0.031471953, 0.08554964, 0.23254804, 0.6321311}
+			if !FloatingPointEqual(values, expected) {
+				t.Errorf("expected %+v, got %+v", expected, values)
+			}
+		})
+	}
+}
+
 func FloatingPointEqual(a, b []float32) bool {
 	if len(a) != len(b) {
 		return false

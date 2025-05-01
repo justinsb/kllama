@@ -65,6 +65,9 @@ func GetDependencies(computation *api.TensorOperation) []TensorID {
 	case *api.TensorOperation_Silu:
 		return []TensorID{TensorID(operation.Silu.GetSource())}
 
+	case *api.TensorOperation_Softmax:
+		return []TensorID{TensorID(operation.Softmax.GetSource())}
+
 	default:
 		panic(fmt.Sprintf("unsupported operation: %T %+v", operation, operation))
 	}
