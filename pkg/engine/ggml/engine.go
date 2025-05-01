@@ -138,6 +138,7 @@ func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
 	}
 
 	if computation := tensor.definition.GetComputation(); computation != nil {
+
 		operation := computation.GetOperation()
 		switch operation := operation.(type) {
 		// case *api.TensorOperation_LinearScale:
@@ -179,10 +180,41 @@ func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
 			tensor.ggmlTensor = rmsNorm
 			return nil
 
+		case *api.TensorOperation_DotMultiply:
+			sourceTensors, err := c.getSourceTensors(operation.DotMultiply.GetSources()...)
+			if err != nil {
+				return err
+			}
+			for _, sourceTensor := range sourceTensors {
+				if sourceTensor.ggmlTensor == nil {
+					return fmt.Errorf("source tensor %d has no GGML tensor", sourceTensor.id)
+				}
+			}
+			if len(sourceTensors) != 2 {
+				return fmt.Errorf("expected 2 source tensors, got %d", len(sourceTensors))
+			}
+
+			dotProduct := c.ggmlContext.GgmlMul(sourceTensors[0].ggmlTensor, sourceTensors[1].ggmlTensor)
+
+			tensor.ggmlTensor = dotProduct
+			return nil
+
 		default:
-			return fmt.Errorf("unsupported operation: %v", operation)
+			return fmt.Errorf("unsupported operation: %T %+v", operation, operation)
 		}
 	}
 
 	return fmt.Errorf("tensor %d has no computation", tensor.definition.GetId())
+}
+
+func (c *CalculationScope) getSourceTensors(dependencies ...int32) ([]*tensor, error) {
+	out := make([]*tensor, len(dependencies))
+	for i, dependency := range dependencies {
+		dependencyTensor, found := c.tensors[TensorID(dependency)]
+		if !found {
+			return nil, fmt.Errorf("source tensor %d not found", dependency)
+		}
+		out[i] = dependencyTensor
+	}
+	return out, nil
 }

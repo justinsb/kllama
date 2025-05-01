@@ -32,11 +32,17 @@ func NewGgmlContext(params C.struct_ggml_init_params) (*GgmlContext, error) {
 	return &GgmlContext{p: p}, nil
 }
 
-// GgmlRMSNorm
+// GgmlRMSNorm computes the RMS norm of a tensor
 func (ctx *GgmlContext) GgmlRMSNorm(t *GgmlTensor, eps float32) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_rms_norm(ctx.p, t.p, C.float(eps))}
 }
 
+// GgmlMul computes the element-wise product of two tensors
+func (ctx *GgmlContext) GgmlMul(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
+	return &GgmlTensor{p: C.ggml_mul(ctx.p, t1.p, t2.p)}
+}
+
+// GgmlFree frees the GGML context
 func (ctx *GgmlContext) Free() {
 	if ctx.p == nil {
 		return

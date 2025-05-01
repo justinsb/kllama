@@ -56,7 +56,18 @@ func GetDependencies(computation *api.TensorOperation) []TensorID {
 		source := TensorID(operation.RmsNorm.GetSource())
 		return []TensorID{source}
 
+	case *api.TensorOperation_DotMultiply:
+		return protoToTensorIDs(operation.DotMultiply.GetSources())
+
 	default:
-		panic(fmt.Sprintf("unsupported operation: %v", operation))
+		panic(fmt.Sprintf("unsupported operation: %T %+v", operation, operation))
 	}
+}
+
+func protoToTensorIDs(ids []int32) []TensorID {
+	tensorIDs := make([]TensorID, len(ids))
+	for i, id := range ids {
+		tensorIDs[i] = TensorID(id)
+	}
+	return tensorIDs
 }

@@ -34,25 +34,13 @@ func (c *CalculationScope) AllTensors() map[TensorID]engine.Tensor {
 
 func (c *CalculationScope) RegisterTensors(tensors []*api.Tensor) error {
 	for _, definition := range tensors {
-		id := TensorID(definition.GetId())
-		if _, ok := c.tensors[id]; ok {
+		t := newTensor(definition)
+
+		if _, ok := c.tensors[t.id]; ok {
 			return fmt.Errorf("tensor %d already registered", definition.GetId())
 		}
 
-		t := &tensor{
-			id:         id,
-			definition: definition,
-		}
-		if inlineData := definition.GetInlineData(); inlineData != nil {
-			t.inlineData = inlineData
-		}
-
-		if computation := definition.GetComputation(); computation != nil {
-			dependencies := engine.GetDependencies(computation)
-			t.dependencies = append(t.dependencies, dependencies...)
-		}
-
-		c.tensors[id] = t
+		c.tensors[t.id] = t
 	}
 	return nil
 }
@@ -131,11 +119,59 @@ func (c *CalculationScope) evaluateTensor(tensor *tensor) error {
 			tensor.inlineData = &api.InlineData{Values: values}
 			return nil
 
+		case *api.TensorOperation_DotMultiply:
+			sourceTensors, err := c.getSourceTensors(operation.DotMultiply.GetSources()...)
+			if err != nil {
+				return err
+			}
+			if len(sourceTensors) < 2 {
+				return fmt.Errorf("expected at least 2 source tensors, got %d", len(sourceTensors))
+			}
+			for _, sourceTensor := range sourceTensors {
+				if sourceTensor.inlineData == nil {
+					return fmt.Errorf("source tensor %d has no inline data", sourceTensor.id)
+				}
+			}
+			if len(sourceTensors) != 2 {
+				return fmt.Errorf("expected 2 source tensors, got %d", len(sourceTensors))
+			}
+			sourceTensor0 := sourceTensors[0]
+			sourceTensor1 := sourceTensors[1]
+
+			if !sameSize(sourceTensor0, sourceTensor1) {
+				return fmt.Errorf("tensors %d and %d have different sizes", sourceTensor0.id, sourceTensor1.id)
+			}
+
+			if sourceTensor0.NDimensions() == 1 {
+				v0 := sourceTensor0.inlineData.GetValues()
+				v1 := sourceTensor1.inlineData.GetValues()
+				values := make([]float32, len(v0))
+				for i := range v0 {
+					values[i] = v0[i] * v1[i]
+				}
+				tensor.inlineData = &api.InlineData{Values: values}
+				return nil
+			} else {
+				return fmt.Errorf("unsupported tensor dimensions: %d", sourceTensor0.NDimensions())
+			}
+
 		default:
-			return fmt.Errorf("unsupported operation: %v", operation)
+			return fmt.Errorf("unsupported operation: %T %+v", operation, operation)
 		}
 
 	}
 
 	return fmt.Errorf("tensor %d has no computation", tensor.definition.GetId())
+}
+
+func (c *CalculationScope) getSourceTensors(dependencies ...int32) ([]*tensor, error) {
+	out := make([]*tensor, len(dependencies))
+	for i, dependency := range dependencies {
+		dependencyTensor, found := c.tensors[TensorID(dependency)]
+		if !found {
+			return nil, fmt.Errorf("source tensor %d not found", dependency)
+		}
+		out[i] = dependencyTensor
+	}
+	return out, nil
 }

@@ -44,6 +44,7 @@ message TensorOperation {
     oneof operation {
         LinearScale linear_scale = 1;
         RMSNorm rms_norm = 2;
+        DotMultiply dot_multiply = 3;
     }
 }
 
@@ -58,4 +59,8 @@ message RMSNorm {
     int32 source = 1;
 
     float epsilon = 2;
+}
+
+message DotMultiply {
+    repeated int32 sources = 1;
 }
