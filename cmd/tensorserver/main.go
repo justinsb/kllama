@@ -65,7 +65,11 @@ type CalcServer struct {
 }
 
 func (s *CalcServer) Calculate(ctx context.Context, req *api.CalculateRequest) (*api.CalculateResponse, error) {
-	scope := fallback.NewCalculationScope()
+	scope, err := fallback.NewCalculationScope()
+	if err != nil {
+		return nil, err
+	}
+	defer scope.Close()
 
 	response, err := engine.Evaluate(scope, req)
 	if err != nil {

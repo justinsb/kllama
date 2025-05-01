@@ -42,4 +42,5 @@ func (ctx *GgmlContext) Free() {
 		return
 	}
 	C.ggml_free(ctx.p)
+	ctx.p = nil
 }

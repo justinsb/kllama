@@ -22,12 +22,17 @@ func Evaluate(scope Scope, req *api.CalculateRequest) (*api.CalculateResponse, e
 	//		}
 	//	}
 
-	if err := scope.Evaluate(req.GetOutputTensors()); err != nil {
+	wantTensors := make([]TensorID, len(req.GetOutputTensors()))
+	for i, id := range req.GetOutputTensors() {
+		wantTensors[i] = TensorID(id)
+	}
+	if err := scope.Evaluate(wantTensors); err != nil {
 		return nil, err
 	}
 
+	allTensors := scope.AllTensors()
 	for _, outputTensorID := range req.GetOutputTensors() {
-		tensor, found := scope.GetTensor(outputTensorID)
+		tensor, found := allTensors[TensorID(outputTensorID)]
 		if !found {
 			return nil, status.Errorf(codes.InvalidArgument, "tensor %d not found", outputTensorID)
 		}
@@ -43,13 +48,13 @@ func Evaluate(scope Scope, req *api.CalculateRequest) (*api.CalculateResponse, e
 	return response, nil
 }
 
-func GetDependencies(computation *api.TensorOperation) []int32 {
+func GetDependencies(computation *api.TensorOperation) []TensorID {
 	operation := computation.GetOperation()
 	switch operation := operation.(type) {
 
 	case *api.TensorOperation_RmsNorm:
-		source := operation.RmsNorm.GetSource()
-		return []int32{source}
+		source := TensorID(operation.RmsNorm.GetSource())
+		return []TensorID{source}
 
 	default:
 		panic(fmt.Sprintf("unsupported operation: %v", operation))

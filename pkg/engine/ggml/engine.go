@@ -7,8 +7,10 @@ import (
 	"github.com/justinsb/kllama/pkg/engine"
 )
 
+type TensorID = engine.TensorID
+
 type CalculationScope struct {
-	tensors map[int32]*tensor
+	tensors map[TensorID]*tensor
 
 	ggmlContext *GgmlContext
 }
@@ -19,7 +21,7 @@ func NewCalculationScope() (*CalculationScope, error) {
 		return nil, err
 	}
 	return &CalculationScope{
-		tensors:     make(map[int32]*tensor),
+		tensors:     make(map[TensorID]*tensor),
 		ggmlContext: ggmlContext,
 	}, nil
 }
@@ -30,7 +32,7 @@ func (c *CalculationScope) Close() error {
 	return nil
 }
 
-func (c *CalculationScope) Evaluate(wantTensors []int32) error {
+func (c *CalculationScope) Evaluate(wantTensors []TensorID) error {
 	graph, err := c.ggmlContext.NewGgmlCGraph()
 	if err != nil {
 		return fmt.Errorf("failed to create graph: %w", err)
@@ -38,35 +40,16 @@ func (c *CalculationScope) Evaluate(wantTensors []int32) error {
 	defer graph.Free()
 
 	// Note: order matters when calling BuildForwardExpand!
-	evaluationOrder := make([]*tensor, 0, len(c.tensors))
-	done := make(map[int32]bool)
-
-	for {
-		progress := false
-		for id, tensor := range c.tensors {
-			if done[id] {
-				continue
-			}
-
-			ready := true
-			for _, dep := range tensor.dependencies {
-				if !done[dep] {
-					ready = false
-					break
-				}
-			}
-			if ready {
-				done[id] = true
-				evaluationOrder = append(evaluationOrder, tensor)
-				progress = true
-			}
-		}
-		if !progress {
-			break
-		}
+	evaluationOrder, err := engine.BuildDAG(c, wantTensors)
+	if err != nil {
+		return fmt.Errorf("failed to build DAG: %w", err)
 	}
 
-	for _, tensor := range evaluationOrder {
+	for _, tensorID := range evaluationOrder {
+		tensor, ok := c.tensors[tensorID]
+		if !ok {
+			return fmt.Errorf("tensor %d not found", tensorID)
+		}
 		if tensor.ggmlTensor != nil {
 			continue
 		}
@@ -75,9 +58,13 @@ func (c *CalculationScope) Evaluate(wantTensors []int32) error {
 		}
 	}
 
-	for _, tensor := range evaluationOrder {
+	for _, tensorID := range evaluationOrder {
+		tensor, ok := c.tensors[tensorID]
+		if !ok {
+			return fmt.Errorf("tensor %d not found", tensorID)
+		}
 		if tensor.ggmlTensor == nil {
-			return fmt.Errorf("tensor %d has no GGML tensor", tensor.definition.GetId())
+			return fmt.Errorf("tensor %d has no GGML tensor", tensorID)
 		}
 		graph.BuildForwardExpand(tensor.ggmlTensor)
 	}
@@ -93,26 +80,23 @@ func (c *CalculationScope) Evaluate(wantTensors []int32) error {
 	return nil
 }
 
-func (c *CalculationScope) GetTensor(id int32) (engine.Tensor, bool) {
-	tensor, ok := c.tensors[id]
-	return tensor, ok
-}
-
-func (c *CalculationScope) getTensor(id int32) (*tensor, bool) {
-	tensor, ok := c.tensors[id]
-	if !ok {
-		return nil, false
+func (c *CalculationScope) AllTensors() map[TensorID]engine.Tensor {
+	tensors := make(map[TensorID]engine.Tensor, len(c.tensors))
+	for _, tensor := range c.tensors {
+		tensors[tensor.id] = tensor
 	}
-	return tensor, true
+	return tensors
 }
 
 func (c *CalculationScope) RegisterTensors(tensors []*api.Tensor) error {
 	for _, definition := range tensors {
-		if _, ok := c.tensors[definition.GetId()]; ok {
+		id := TensorID(definition.GetId())
+		if _, ok := c.tensors[id]; ok {
 			return fmt.Errorf("tensor %d already registered", definition.GetId())
 		}
 
 		t := &tensor{
+			id:         id,
 			definition: definition,
 		}
 		if inlineData := definition.GetInlineData(); inlineData != nil {
@@ -136,37 +120,9 @@ func (c *CalculationScope) RegisterTensors(tensors []*api.Tensor) error {
 			t.dependencies = append(t.dependencies, dependencies...)
 		}
 
-		c.tensors[definition.GetId()] = t
+		c.tensors[id] = t
 	}
 	return nil
-}
-
-type tensor struct {
-	definition *api.Tensor
-	// inlineData *api.InlineData
-
-	dependencies []int32
-	ggmlTensor   *GgmlTensor
-}
-
-func (t *tensor) CopyDataTo(result *api.Tensor) error {
-	if t.ggmlTensor == nil {
-		return fmt.Errorf("copy on tensor %d with no GGML tensor", t.definition.GetId())
-	}
-	nDimensions := t.ggmlTensor.GetNDims()
-	if nDimensions == 1 {
-		if !t.ggmlTensor.IsContiguous() {
-			return fmt.Errorf("tensor %d is not contiguous", t.definition.GetId())
-		}
-		values, err := t.ggmlTensor.GetValues_1D_F32()
-		if err != nil {
-			return fmt.Errorf("getting values: %v", err)
-		}
-		result.InlineData = &api.InlineData{Values: values}
-		return nil
-	} else {
-		return fmt.Errorf("tensor %d has %d dimensions, expected 1", t.definition.GetId(), nDimensions)
-	}
 }
 
 func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
@@ -205,8 +161,8 @@ func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
 		// 	tensor.inlineData = &api.InlineData{Values: values}
 
 		case *api.TensorOperation_RmsNorm:
-			source := operation.RmsNorm.GetSource()
-			sourceTensor, found := c.getTensor(source)
+			source := TensorID(operation.RmsNorm.GetSource())
+			sourceTensor, found := c.tensors[source]
 			if !found {
 				return fmt.Errorf("source tensor %d not found", source)
 			}
@@ -226,8 +182,6 @@ func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
 		default:
 			return fmt.Errorf("unsupported operation: %v", operation)
 		}
-
-		return nil
 	}
 
 	return fmt.Errorf("tensor %d has no computation", tensor.definition.GetId())

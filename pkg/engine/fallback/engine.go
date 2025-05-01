@@ -8,13 +8,15 @@ import (
 	"github.com/justinsb/kllama/pkg/engine"
 )
 
+type TensorID = engine.TensorID
+
 type CalculationScope struct {
-	tensors map[int32]*tensor
+	tensors map[TensorID]*tensor
 }
 
 func NewCalculationScope() (*CalculationScope, error) {
 	return &CalculationScope{
-		tensors: make(map[int32]*tensor),
+		tensors: make(map[TensorID]*tensor),
 	}, nil
 }
 
@@ -22,23 +24,23 @@ func (c *CalculationScope) Close() error {
 	return nil
 }
 
-func (c *CalculationScope) GetTensor(id int32) (engine.Tensor, bool) {
-	tensor, ok := c.tensors[id]
-	return tensor, ok
-}
-
-func (c *CalculationScope) getTensor(id int32) (*tensor, bool) {
-	tensor, ok := c.tensors[id]
-	return tensor, ok
+func (c *CalculationScope) AllTensors() map[TensorID]engine.Tensor {
+	tensors := make(map[TensorID]engine.Tensor, len(c.tensors))
+	for _, tensor := range c.tensors {
+		tensors[tensor.id] = tensor
+	}
+	return tensors
 }
 
 func (c *CalculationScope) RegisterTensors(tensors []*api.Tensor) error {
 	for _, definition := range tensors {
-		if _, ok := c.tensors[definition.GetId()]; ok {
+		id := TensorID(definition.GetId())
+		if _, ok := c.tensors[id]; ok {
 			return fmt.Errorf("tensor %d already registered", definition.GetId())
 		}
 
 		t := &tensor{
+			id:         id,
 			definition: definition,
 		}
 		if inlineData := definition.GetInlineData(); inlineData != nil {
@@ -50,60 +52,22 @@ func (c *CalculationScope) RegisterTensors(tensors []*api.Tensor) error {
 			t.dependencies = append(t.dependencies, dependencies...)
 		}
 
-		c.tensors[definition.GetId()] = t
+		c.tensors[id] = t
 	}
 	return nil
 }
 
-type tensor struct {
-	definition *api.Tensor
-	inlineData *api.InlineData
-
-	dependencies []int32
-}
-
-func (t *tensor) CopyDataTo(result *api.Tensor) error {
-	if t.inlineData == nil {
-		return fmt.Errorf("tensor %d has no inline data", t.definition.GetId())
-	}
-	// TODO: copy the inline data
-	result.InlineData = t.inlineData
-	return nil
-}
-
-func (c *CalculationScope) Evaluate(wantTensors []int32) error {
-	evaluationOrder := make([]*tensor, 0, len(c.tensors))
-	done := make(map[int32]bool)
-
-	for {
-		progress := false
-		for id, tensor := range c.tensors {
-			if done[id] {
-				continue
-			}
-
-			ready := true
-			for _, dep := range tensor.dependencies {
-				if !done[dep] {
-					ready = false
-					break
-				}
-			}
-			if ready {
-				done[id] = true
-				evaluationOrder = append(evaluationOrder, tensor)
-				progress = true
-			}
-		}
-		if !progress {
-			break
-		}
+func (c *CalculationScope) Evaluate(wantTensors []TensorID) error {
+	evaluationOrder, err := engine.BuildDAG(c, wantTensors)
+	if err != nil {
+		return err
 	}
 
-	// TODO: Check that all output tensors are in the DAG
-	// TODO: Only evaluate output tensors?
-
-	for _, tensor := range evaluationOrder {
+	for _, tensorID := range evaluationOrder {
+		tensor, ok := c.tensors[tensorID]
+		if !ok {
+			return fmt.Errorf("tensor %d not found", tensorID)
+		}
 		if err := c.evaluateTensor(tensor); err != nil {
 			return err
 		}
@@ -122,8 +86,8 @@ func (c *CalculationScope) evaluateTensor(tensor *tensor) error {
 		switch operation := operation.(type) {
 		case *api.TensorOperation_LinearScale:
 			result := &api.Tensor{}
-			source := operation.LinearScale.GetSource()
-			sourceTensor, found := c.getTensor(source)
+			source := TensorID(operation.LinearScale.GetSource())
+			sourceTensor, found := c.tensors[source]
 			if !found {
 				return fmt.Errorf("source tensor %d not found", source)
 			}
@@ -140,8 +104,8 @@ func (c *CalculationScope) evaluateTensor(tensor *tensor) error {
 
 		case *api.TensorOperation_RmsNorm:
 			result := &api.Tensor{}
-			source := operation.RmsNorm.GetSource()
-			sourceTensor, found := c.getTensor(source)
+			source := TensorID(operation.RmsNorm.GetSource())
+			sourceTensor, found := c.tensors[source]
 			if !found {
 				return fmt.Errorf("source tensor %d not found", source)
 			}
