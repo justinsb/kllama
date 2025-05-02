@@ -43,6 +43,13 @@ func (t *tensor) String() string {
 func (t *tensor) NDimensions() int {
 	return len(t.dimensions)
 }
+func (t *tensor) RowCount() int {
+	return int(t.dimensions[0])
+}
+
+func (t *tensor) ColumnCount() int {
+	return int(t.dimensions[1])
+}
 
 func sameSize(t1 *tensor, t2 *tensor) bool {
 	return slices.Equal(t1.dimensions, t2.dimensions)

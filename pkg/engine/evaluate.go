@@ -59,6 +59,9 @@ func GetDependencies(computation *api.TensorOperation) []TensorID {
 	case *api.TensorOperation_DotMultiply:
 		return protoToTensorIDs(operation.DotMultiply.GetSources())
 
+	case *api.TensorOperation_MatrixMultiply:
+		return protoToTensorIDs(operation.MatrixMultiply.GetSources())
+
 	case *api.TensorOperation_Add:
 		return protoToTensorIDs(operation.Add.GetSources())
 

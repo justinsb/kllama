@@ -101,8 +101,16 @@ func (c *CalculationScope) RegisterTensors(tensors []*api.Tensor) error {
 		}
 		if inlineData := definition.GetInlineData(); inlineData != nil {
 			if len(inlineData.Dimensions) == 1 {
-				n := len(inlineData.GetValues())
-				ggmlTensor, err := c.ggmlContext.NewGgmlTensor1D(GGML_TYPE_F32, n)
+				ggmlTensor, err := c.ggmlContext.NewGgmlTensor1D(GGML_TYPE_F32, inlineData.Dimensions[0])
+				if err != nil {
+					return fmt.Errorf("creating GGML tensor: %v", err)
+				}
+				if err := ggmlTensor.SetValues(inlineData.GetValues()); err != nil {
+					return fmt.Errorf("setting values: %v", err)
+				}
+				t.ggmlTensor = ggmlTensor
+			} else if len(inlineData.Dimensions) == 2 {
+				ggmlTensor, err := c.ggmlContext.NewGgmlTensor2D(GGML_TYPE_F32, inlineData.Dimensions[1], inlineData.Dimensions[0])
 				if err != nil {
 					return fmt.Errorf("creating GGML tensor: %v", err)
 				}
@@ -111,7 +119,7 @@ func (c *CalculationScope) RegisterTensors(tensors []*api.Tensor) error {
 				}
 				t.ggmlTensor = ggmlTensor
 			} else {
-				return fmt.Errorf("inline data %d has %d dimensions, expected 1", definition.GetId(), len(inlineData.Dimensions))
+				return fmt.Errorf("inline data %d has %d dimensions, expected 1 or 2", definition.GetId(), len(inlineData.Dimensions))
 			}
 		}
 
@@ -197,6 +205,41 @@ func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
 			dotProduct := c.ggmlContext.GgmlMul(sourceTensors[0].ggmlTensor, sourceTensors[1].ggmlTensor)
 
 			tensor.ggmlTensor = dotProduct
+			return nil
+
+		case *api.TensorOperation_MatrixMultiply:
+			sourceTensors, err := c.getSourceTensors(operation.MatrixMultiply.GetSources()...)
+			if err != nil {
+				return err
+			}
+			for _, sourceTensor := range sourceTensors {
+				if sourceTensor.ggmlTensor == nil {
+					return fmt.Errorf("source tensor %d has no GGML tensor", sourceTensor.id)
+				}
+			}
+			if len(sourceTensors) != 2 {
+				return fmt.Errorf("expected 2 source tensors, got %d", len(sourceTensors))
+			}
+
+			// Note that the GGML mul_mat function is itself transposed
+			// It returns the _transposed_ result of left * transpose(right)
+			// We currently implement a "conventional" matrix multiply,
+			// so we need to transpose the result of mul_mat
+
+			// TODO: Fix this!
+
+			left := sourceTensors[0].ggmlTensor
+
+			right := sourceTensors[1].ggmlTensor
+			rightTranspose := c.ggmlContext.GgmlTranspose(right)
+			rightTransposeDup := c.ggmlContext.ggml_dup(rightTranspose)
+			matmul := c.ggmlContext.ggml_mul_mat(left, rightTransposeDup)
+
+			// mulmat is itself transposed
+			matmulTranspose := c.ggmlContext.GgmlTranspose(matmul)
+			matmulTransposeDup := c.ggmlContext.ggml_dup(matmulTranspose)
+
+			tensor.ggmlTensor = matmulTransposeDup
 			return nil
 
 		case *api.TensorOperation_Add:

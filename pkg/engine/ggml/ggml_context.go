@@ -42,6 +42,26 @@ func (ctx *GgmlContext) GgmlMul(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_mul(ctx.p, t1.p, t2.p)}
 }
 
+func (ctx *GgmlContext) ggml_mul_mat(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
+	return &GgmlTensor{p: C.ggml_mul_mat(ctx.p, t1.p, t2.p)}
+}
+
+func (ctx *GgmlContext) GgmlTranspose(t *GgmlTensor) *GgmlTensor {
+	return &GgmlTensor{p: C.ggml_transpose(ctx.p, t.p)}
+}
+
+func (ctx *GgmlContext) ggml_dup(t *GgmlTensor) *GgmlTensor {
+	return &GgmlTensor{p: C.ggml_dup(ctx.p, t.p)}
+}
+
+func (ctx *GgmlContext) ggml_reshape_2d(t *GgmlTensor, ne0 int, ne1 int) *GgmlTensor {
+	return &GgmlTensor{p: C.ggml_reshape_2d(ctx.p, t.p, C.int64_t(ne0), C.int64_t(ne1))}
+}
+
+func (ctx *GgmlContext) ggml_reshape_3d(t *GgmlTensor, ne0 int, ne1 int, ne2 int) *GgmlTensor {
+	return &GgmlTensor{p: C.ggml_reshape_3d(ctx.p, t.p, C.int64_t(ne0), C.int64_t(ne1), C.int64_t(ne2))}
+}
+
 // GgmlAdd computes the element-wise sum of two tensors
 func (ctx *GgmlContext) GgmlAdd(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_add(ctx.p, t1.p, t2.p)}

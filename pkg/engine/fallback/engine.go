@@ -158,6 +158,56 @@ func (c *CalculationScope) evaluateTensor(tensor *tensor) error {
 				return fmt.Errorf("unsupported tensor dimensions: %d", sourceTensor0.NDimensions())
 			}
 
+		case *api.TensorOperation_MatrixMultiply:
+			sourceTensors, err := c.getSourceTensors(operation.MatrixMultiply.GetSources()...)
+			if err != nil {
+				return err
+			}
+			if len(sourceTensors) < 2 {
+				return fmt.Errorf("expected at least 2 source tensors, got %d", len(sourceTensors))
+			}
+			for _, sourceTensor := range sourceTensors {
+				if sourceTensor.inlineData == nil {
+					return fmt.Errorf("source tensor %d has no inline data", sourceTensor.id)
+				}
+			}
+			if len(sourceTensors) != 2 {
+				return fmt.Errorf("expected 2 source tensors, got %d", len(sourceTensors))
+			}
+			sourceTensor0 := sourceTensors[0]
+			sourceTensor1 := sourceTensors[1]
+
+			if sourceTensor0.NDimensions() == 2 && sourceTensor1.NDimensions() == 2 {
+				if sourceTensor0.ColumnCount() != sourceTensor1.RowCount() {
+					return fmt.Errorf("tensors %v and %v cannot be multiplied", sourceTensor0, sourceTensor1)
+				}
+
+				nOut := sourceTensor0.RowCount() * sourceTensor1.ColumnCount()
+				values := make([]float32, nOut)
+
+				p0 := sourceTensor0.inlineData.GetValues()
+				p1 := sourceTensor1.inlineData.GetValues()
+
+				columnStride0 := sourceTensor0.ColumnCount()
+				columnStride1 := sourceTensor1.ColumnCount()
+
+				for i := 0; i < sourceTensor0.RowCount(); i++ {
+					for j := 0; j < sourceTensor1.ColumnCount(); j++ {
+						sum := float32(0)
+						for k := 0; k < sourceTensor0.ColumnCount(); k++ {
+							sum += p0[i*int(columnStride0)+k] * p1[k*int(columnStride1)+j]
+						}
+						values[i*int(columnStride1)+j] = sum
+					}
+				}
+
+				tensor.inlineData = &api.InlineData{Values: values, Dimensions: sourceTensor0.dimensions}
+				tensor.dimensions = tensor.inlineData.Dimensions
+				return nil
+			} else {
+				return fmt.Errorf("unsupported tensor dimensions: %d and %d	", sourceTensor0.NDimensions(), sourceTensor1.NDimensions())
+			}
+
 		case *api.TensorOperation_Add:
 			sourceTensors, err := c.getSourceTensors(operation.Add.GetSources()...)
 			if err != nil {

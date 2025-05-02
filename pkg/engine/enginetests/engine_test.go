@@ -167,7 +167,7 @@ func TestSilu(t *testing.T) {
 
 			request := &api.CalculateRequest{
 				Tensors: []*api.Tensor{
-					{Id: 1, InlineData: &api.InlineData{Dimensions: []int32{3}, Values: []float32{-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5}}},
+					{Id: 1, InlineData: &api.InlineData{Dimensions: []int32{11}, Values: []float32{-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5}}},
 					{Id: 3, Computation: &api.TensorOperation{Operation: &api.TensorOperation_Silu{Silu: &api.Silu{Source: 1}}}},
 				},
 				OutputTensors: []int32{3},
@@ -213,7 +213,7 @@ func TestSoftmax(t *testing.T) {
 
 			request := &api.CalculateRequest{
 				Tensors: []*api.Tensor{
-					{Id: 1, InlineData: &api.InlineData{Dimensions: []int32{3}, Values: []float32{-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5}}},
+					{Id: 1, InlineData: &api.InlineData{Dimensions: []int32{11}, Values: []float32{-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5}}},
 					{Id: 3, Computation: &api.TensorOperation{Operation: &api.TensorOperation_Softmax{Softmax: &api.Softmax{Source: 1}}}},
 				},
 				OutputTensors: []int32{3},
@@ -241,6 +241,49 @@ func TestSoftmax(t *testing.T) {
 			values := response.Results[0].InlineData.Values
 
 			expected := []float32{2.8698709e-05, 7.801117e-05, 0.00021205637, 0.00057642895, 0.0015668964, 0.0042592655, 0.011577884, 0.031471953, 0.08554964, 0.23254804, 0.6321311}
+			if !FloatingPointEqual(values, expected) {
+				t.Errorf("expected %+v, got %+v", expected, values)
+			}
+		})
+	}
+}
+func TestMatrixMultiply(t *testing.T) {
+	for name, newEngine := range engines() {
+		t.Run(name, func(t *testing.T) {
+			scope, err := newEngine()
+			if err != nil {
+				t.Fatalf("failed to create engine: %v", err)
+			}
+			defer scope.Close()
+
+			request := &api.CalculateRequest{
+				Tensors: []*api.Tensor{
+					{Id: 1, InlineData: &api.InlineData{Dimensions: []int32{2, 3}, Values: []float32{1, 2, 3, 4, 5, 6}}},
+					{Id: 2, InlineData: &api.InlineData{Dimensions: []int32{3, 2}, Values: []float32{7, 8, 9, 10, 11, 12}}},
+					{Id: 3, Computation: &api.TensorOperation{Operation: &api.TensorOperation_MatrixMultiply{MatrixMultiply: &api.MatrixMultiply{Sources: []int32{1, 2}}}}},
+				},
+				OutputTensors: []int32{3},
+			}
+
+			response, err := engine.Evaluate(scope, request)
+			if err != nil {
+				t.Fatalf("failed to evaluate: %v", err)
+			}
+
+			t.Logf("response: %v", response)
+
+			// Note that response is _not_ valid if we close here
+
+			if len(response.Results) != 1 {
+				t.Fatalf("expected 1 result, got %d", len(response.Results))
+			}
+
+			if response.Results[0].InlineData == nil {
+				t.Fatalf("expected inline data, got nil")
+			}
+			values := response.Results[0].InlineData.Values
+
+			expected := []float32{58, 64, 139, 154}
 			if !FloatingPointEqual(values, expected) {
 				t.Errorf("expected %+v, got %+v", expected, values)
 			}

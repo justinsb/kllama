@@ -15,6 +15,19 @@ type GgmlTensor struct {
 	p *C.struct_ggml_tensor
 }
 
+func (t *GgmlTensor) String() string {
+	return fmt.Sprintf("GgmlTensor{dimensions: %v}", t.Shape())
+}
+
+func (t *GgmlTensor) Shape() []int {
+	ndims := t.GetNDims()
+	dims := make([]int, ndims)
+	for i := 0; i < ndims; i++ {
+		dims[i] = int(t.p.ne[i])
+	}
+	return dims
+}
+
 type GgmlType C.enum_ggml_type
 
 const (
@@ -23,8 +36,16 @@ const (
 	GGML_TYPE_I32 GgmlType = C.GGML_TYPE_I32
 )
 
-func (ctx *GgmlContext) NewGgmlTensor1D(t GgmlType, numElements int) (*GgmlTensor, error) {
+func (ctx *GgmlContext) NewGgmlTensor1D(t GgmlType, numElements int32) (*GgmlTensor, error) {
 	p := C.ggml_new_tensor_1d(ctx.p, C.enum_ggml_type(t), C.int64_t(numElements))
+	if p == nil {
+		return nil, errors.New("failed to create GGML tensor")
+	}
+	return &GgmlTensor{p: p}, nil
+}
+
+func (ctx *GgmlContext) NewGgmlTensor2D(t GgmlType, ne0 int32, ne1 int32) (*GgmlTensor, error) {
+	p := C.ggml_new_tensor_2d(ctx.p, C.enum_ggml_type(t), C.int64_t(ne0), C.int64_t(ne1))
 	if p == nil {
 		return nil, errors.New("failed to create GGML tensor")
 	}
@@ -62,6 +83,19 @@ func (t *GgmlTensor) GetValues_1D_F32() ([]float32, error) {
 		data = unsafe.Pointer(uintptr(data) + 4)
 	}
 	return values, nil
+}
+
+func (t *GgmlTensor) GetValues() ([]float32, error) {
+	if !t.IsContiguous() {
+		return nil, fmt.Errorf("tensor is not contiguous")
+	}
+	data := unsafe.Pointer(C.ggml_get_data_f32(t.p))
+	n := t.GetNelements()
+	return unsafe.Slice((*float32)(data), n), nil
+}
+
+func (t *GgmlTensor) GetRowStride() int64 {
+	return int64(t.p.ne[1])
 }
 
 func (t *GgmlTensor) SetValues(values []float32) error {
