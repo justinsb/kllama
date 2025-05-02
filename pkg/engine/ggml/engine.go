@@ -5,6 +5,7 @@ import (
 
 	api "github.com/justinsb/kllama/api/v1alpha1"
 	"github.com/justinsb/kllama/pkg/engine"
+	llamacpp "github.com/justinsb/kllama/third_party/llamacpp"
 )
 
 type TensorID = engine.TensorID
@@ -12,11 +13,11 @@ type TensorID = engine.TensorID
 type CalculationScope struct {
 	tensors map[TensorID]*tensor
 
-	ggmlContext *GgmlContext
+	ggmlContext *llamacpp.GgmlContext
 }
 
 func NewCalculationScope() (*CalculationScope, error) {
-	ggmlContext, err := NewGgmlContext(NewGgmlInitParams(1024 * 1024 * 1024))
+	ggmlContext, err := llamacpp.NewGgmlContext(llamacpp.NewGgmlInitParams(1024 * 1024 * 1024))
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,7 @@ func (c *CalculationScope) RegisterTensors(tensors []*api.Tensor) error {
 		}
 		if inlineData := definition.GetInlineData(); inlineData != nil {
 			if len(inlineData.Dimensions) == 1 {
-				ggmlTensor, err := c.ggmlContext.NewGgmlTensor1D(GGML_TYPE_F32, inlineData.Dimensions[0])
+				ggmlTensor, err := c.ggmlContext.NewGgmlTensor1D(llamacpp.GGML_TYPE_F32, inlineData.Dimensions[0])
 				if err != nil {
 					return fmt.Errorf("creating GGML tensor: %v", err)
 				}
@@ -110,7 +111,7 @@ func (c *CalculationScope) RegisterTensors(tensors []*api.Tensor) error {
 				}
 				t.ggmlTensor = ggmlTensor
 			} else if len(inlineData.Dimensions) == 2 {
-				ggmlTensor, err := c.ggmlContext.NewGgmlTensor2D(GGML_TYPE_F32, inlineData.Dimensions[1], inlineData.Dimensions[0])
+				ggmlTensor, err := c.ggmlContext.NewGgmlTensor2D(llamacpp.GGML_TYPE_F32, inlineData.Dimensions[1], inlineData.Dimensions[0])
 				if err != nil {
 					return fmt.Errorf("creating GGML tensor: %v", err)
 				}
@@ -232,12 +233,12 @@ func (c *CalculationScope) addComputedTensor(tensor *tensor) error {
 
 			right := sourceTensors[1].ggmlTensor
 			rightTranspose := c.ggmlContext.GgmlTranspose(right)
-			rightTransposeDup := c.ggmlContext.ggml_dup(rightTranspose)
-			matmul := c.ggmlContext.ggml_mul_mat(left, rightTransposeDup)
+			rightTransposeDup := c.ggmlContext.GgmlDup(rightTranspose)
+			matmul := c.ggmlContext.GgmlMulMat(left, rightTransposeDup)
 
 			// mulmat is itself transposed
 			matmulTranspose := c.ggmlContext.GgmlTranspose(matmul)
-			matmulTransposeDup := c.ggmlContext.ggml_dup(matmulTranspose)
+			matmulTransposeDup := c.ggmlContext.GgmlDup(matmulTranspose)
 
 			tensor.ggmlTensor = matmulTransposeDup
 			return nil

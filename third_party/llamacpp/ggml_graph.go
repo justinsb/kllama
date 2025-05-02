@@ -1,5 +1,6 @@
-package ggml
+package llamacpp
 
+// #cgo CFLAGS: -O3 -DNDEBUG -I llama.cpp/include -I llama.cpp/ggml/include
 // #include <stdlib.h>
 // #include "llama.h"
 // #include "ggml.h"

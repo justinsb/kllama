@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	api "github.com/justinsb/kllama/api/v1alpha1"
+	llamacpp "github.com/justinsb/kllama/third_party/llamacpp"
 )
 
 type tensor struct {
@@ -11,7 +12,7 @@ type tensor struct {
 	definition *api.Tensor
 
 	dependencies []TensorID
-	ggmlTensor   *GgmlTensor
+	ggmlTensor   *llamacpp.GgmlTensor
 }
 
 func (t *tensor) CopyDataTo(result *api.Tensor) error {

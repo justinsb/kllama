@@ -1,7 +1,7 @@
-package ggml
+package llamacpp
 
 // #cgo CFLAGS: -O3 -DNDEBUG -I llama.cpp/include -I llama.cpp/ggml/include
-// #cgo LDFLAGS: -L llama.cpp/build/src  -L llama.cpp/build/ggml/src  -L llama.cpp/build/common -l llama -l ggml -l ggml-base -l ggml-cpu -l common -l m  -l stdc++ -framework Accelerate
+
 // #include <stdlib.h>
 // #include "llama.h"
 // #include "ggml.h"
@@ -42,7 +42,7 @@ func (ctx *GgmlContext) GgmlMul(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_mul(ctx.p, t1.p, t2.p)}
 }
 
-func (ctx *GgmlContext) ggml_mul_mat(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
+func (ctx *GgmlContext) GgmlMulMat(t1 *GgmlTensor, t2 *GgmlTensor) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_mul_mat(ctx.p, t1.p, t2.p)}
 }
 
@@ -50,15 +50,15 @@ func (ctx *GgmlContext) GgmlTranspose(t *GgmlTensor) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_transpose(ctx.p, t.p)}
 }
 
-func (ctx *GgmlContext) ggml_dup(t *GgmlTensor) *GgmlTensor {
+func (ctx *GgmlContext) GgmlDup(t *GgmlTensor) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_dup(ctx.p, t.p)}
 }
 
-func (ctx *GgmlContext) ggml_reshape_2d(t *GgmlTensor, ne0 int, ne1 int) *GgmlTensor {
+func (ctx *GgmlContext) GgmlReshape2D(t *GgmlTensor, ne0 int, ne1 int) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_reshape_2d(ctx.p, t.p, C.int64_t(ne0), C.int64_t(ne1))}
 }
 
-func (ctx *GgmlContext) ggml_reshape_3d(t *GgmlTensor, ne0 int, ne1 int, ne2 int) *GgmlTensor {
+func (ctx *GgmlContext) GgmlReshape3D(t *GgmlTensor, ne0 int, ne1 int, ne2 int) *GgmlTensor {
 	return &GgmlTensor{p: C.ggml_reshape_3d(ctx.p, t.p, C.int64_t(ne0), C.int64_t(ne1), C.int64_t(ne2))}
 }
 
