@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+
+import os
+import subprocess
+
+def main():
+    images_dir = "images"
+    for image_name in os.listdir(images_dir):
+        image_path = os.path.join(images_dir, image_name)
+        if not os.path.isdir(image_path):
+            continue
+
+        dockerfile = os.path.join(image_path, "Dockerfile")
+        if not os.path.exists(dockerfile):
+            print(f"Dockerfile not found in {image_path}, skipping")
+            continue
+
+        tag = f"{image_name}:latest"
+        print(f"Building {image_path} with tag {tag}")
+
+        cmd = ["docker", "buildx", "build", "-t", tag, "."]
+        subprocess.run(cmd, cwd=image_path, check=True)
+
+if __name__ == "__main__":
+    main()
